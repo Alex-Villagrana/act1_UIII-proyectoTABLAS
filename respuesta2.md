@@ -1,4 +1,113 @@
-Aquí tienes la implementación completa, estructurada profesionalmente y lista para compilar en **Android, Web y Windows**. El código sigue arquitectura limpia, usa `provider` para el estado, `Firebase` para autenticación y persistencia, y cumple exactamente con los nombres de archivos solicitados.
+
+---
+### 🔹 FASE 1: Estructura base y organización de carpetas
+Se crea un proyecto Flutter estándar y se organiza manualmente siguiendo arquitectura limpia:
+- `core/`: Configuraciones globales (tema visual, rutas nombradas, constantes).
+- `models/`: Clases puras que representan entidades de negocio (ej. `Empleado`). Solo contienen atributos, constructores y métodos de serialización.
+- `providers/`: Lógica de estado reactivo. Aquí vive el `ChangeNotifier` que observa cambios y notifica a la UI.
+- `services/`: Capa de persistencia y comunicación externa. Aquí se aísla toda la interacción con Firestore o APIs.
+- `ui/`: Pantallas, widgets reutilizables y lógica de presentación. Se subdivide en `screens/` (vistas completas) y `widgets/` (componentes UI).
+
+
+**Por qué:** Separar responsabilidades evita que la UI maneje lógica de negocio o conexión a BD, facilitando mantenimiento, pruebas y escalado.
+
+---
+### 🔹 FASE 2: Configuración de Firebase y Autenticación
+1. **Consola Firebase**: Se crea el proyecto `Proyecto-Zonskateshop` y se habilitan:
+   - `Authentication`: Email/Contraseña y Google Sign-In.
+   - `Firestore Database`: Modo producción con reglas básicas de lectura/escritura.
+2. **Integración en Flutter**: Se vincula el proyecto usando la CLI oficial de Firebase. Esto genera configuraciones nativas para Android, Web y Windows.
+3. **Flujo Auth**:
+   - Login/Registro: Validación local → llamada al SDK → manejo de éxitos/errores → redirección.
+   - Recuperación: Solo envía correo de reseteo (Firebase gestiona el token y la UI de cambio).
+   - Google Sign-In: OAuth 2.0 manejado por el plugin. En Web requiere dominio autorizado; en Android requiere firma SHA-1; en Windows se usa flujo web embebido.
+   - Estado de sesión: Se escucha el stream de `authStateChanges` para redirigir automáticamente entre login y dashboard.
+
+---
+### 🔹 FASE 3: Gestión de Estado con `provider`
+- Se instancia un `ChangeNotifierProvider` global en `main.dart`.
+- Cada módulo (Auth, Empleados, Inventario) tiene su propio proveedor.
+- La UI **no modifica datos directamente**. Solo llama a métodos del proveedor.
+- Cuando un proveedor cambia su estado, llama a `notifyListeners()`. Flutter reconstruye solo los widgets que escuchan ese cambio (evita repaints innecesarios).
+- Se usa `listen: false` cuando solo se invoca una acción y `context.watch` o `Consumer` cuando se necesita renderizar datos reactivos.
+
+---
+### 🔹 FASE 4: Modelo de datos y persistencia (Empleado)
+- **Entidad**: `id` (numérico), `nombre`, `puesto`, `salario`.
+- **ID Autonumérico**: Firestore no tiene auto-increment nativo. Se implementa un documento contador (`config/contador_empleados`) que se lee, incrementa y guarda atómicamente antes de cada creación. Esto garantiza unicidad y orden secuencial.
+- **Capa de Servicio (`guardardatosdiccionario`)**:
+  - `guardar()`: Decide si crea o actualiza según el ID.
+  - `obtenerTodos()`: Query ordenada por ID, mapeo a objetos Dart.
+  - `eliminar()`: Borrado por ID de documento.
+  - Manejo de errores y reintentos automáticos en caso de desconexión.
+
+---
+### 🔹 FASE 5: Interfaz de Usuario y Navegación
+- **Tema**: Fondo negro profundo, tarjetas gris oscuro, acentos en rojo vibrante, tipografía blanca con jerarquía clara. Estilo administrativo urbano inspirado en dashboards streetwear.
+- **Rutas nombradas**: Definidas en un mapa centralizado. Permiten navegación profunda, recarga de estado en web y deep linking futuro.
+- **Dashboard (`inicio`)**: Panel central con tarjetas de acceso rápido a Staff, Piezas de Skate y Ropa Streetwear. Cada tarjeta redirige a su módulo correspondiente.
+- **Responsividad**: Layouts usan `LayoutBuilder`, `MediaQuery` y widgets flexibles para adaptarse a móvil (columnas), web/escritorio (grids) sin duplicar lógica.
+
+---
+### 🔹 FASE 6: Implementación del CRUD de Empleados
+1. **Listado (`verempleados`)**:
+   - Al montar, solicita al proveedor que cargue datos.
+   - Muestra estado de carga, lista vacía o errores.
+   - Usa `ListView.builder` para renderizado diferido (solo pinta lo visible).
+2. **Crear/Editar**:
+   - Diálogo o pantalla dedicada con formulario validado.
+   - Al enviar, se construye el objeto `Empleado` y se pasa al proveedor.
+   - El proveedor llama al servicio de persistencia y, al confirmar, recarga la lista.
+3. **Eliminar**:
+   - Confirmación nativa de Flutter.
+   - Llamada asíncrona al servicio. Si falla, se revierte UI y se muestra mensaje.
+4. **Optimización**: El proveedor expone streams o listas inmutables. La UI solo se reconstruye cuando cambia la colección, no en cada interacción menor.
+
+---
+### 🔹 FASE 7: Adaptación Multiplataforma
+- **Android**: 
+  - Firma de depuración/producción configurada en `build.gradle`.
+  - Permisos de internet y estado de red declarados.
+  - Compilación a APK/AAB con `flutter build apk/appbundle`.
+- **Web**:
+  - Habilitar `PathUrlStrategy` para rutas limpias sin `#`.
+  - Configurar CORS en Firebase si se consumen APIs externas.
+  - Compilar con `flutter build web --release` y desplegar en hosting estático.
+- **Windows**:
+  - Habilitar soporte en `flutter config --enable-windows-desktop`.
+  - Empaquetado con MSIX o exe nativo.
+  - Ajustar iconos y metadatos en `windows/runner/`.
+- **Compartido**: La lógica de negocio y proveedores es 100% compartida. Solo cambian configuraciones nativas, assets y comandos de build.
+
+---
+### 🔹 FASE 8: Flujo de Trabajo en VS Code y Despliegue
+1. **Extensiones recomendadas**: Flutter, Dart, Firebase, Error Lens, Pubspec Assist.
+2. **Desarrollo**:
+   - `flutter run` lanza en el dispositivo/emulador activo.
+   - Hot Reload aplica cambios de UI sin reiniciar estado.
+   - Hot Restart reinicia app completa (útil tras cambios en `main` o proveedores).
+3. **Depuración**:
+   - Breakpoints en Dart, inspección de variables, panel de Flutter Inspector para jerarquía de widgets.
+   - Logs de Firebase con `firebase --debug` si es necesario.
+4. **Testing**:
+   - Unitarios para modelos y servicios.
+   - Widget tests para formularios y listas.
+   - Integración con `flutter drive` o Firebase Test Lab.
+5. **Build & Release**:
+   - Variables de entorno para claves sensibles.
+   - Ofuscación y división de código (`--split-debug-info`, `--dart-obfuscation`).
+   - Distribución: Play Console, Firebase App Distribution, GitHub Pages/Netlify (web), Microsoft Store o instalador directo (Windows).
+
+---
+### 🔹 RESUMEN DEL FLUJO COMPLETO
+1. App inicia → lee configuración Firebase → inyecta proveedores globales.
+2. Verifica sesión activa → si no, muestra Login.
+3. Usuario se autentica → Provider actualiza estado → redirige a `inicio`.
+4. Desde `inicio` accede a `empleados` → Provider carga lista desde Firestore → UI renderiza.
+5. Usuario crea/edita/elimina → acción viaja a Provider → Service ejecuta operación en Firestore → Firestore notifica cambio → Provider actualiza lista → UI se reconstruye automáticamente.
+6. Todo escalable: solo se repite el patrón `Model → Service → Provider → UI` para Piezas, Ropa, Ventas, etc.
+
+---
 
 ### 📁 Estructura del Proyecto
 ```
@@ -507,4 +616,389 @@ class _LoginScreenState extends State<LoginScreen> {
 - ✅ Estado reactivo con `Provider`, navegación nombrada, optimizado para VS Code.
 - ✅ Listo para escalar a inventario de piezas y ropa (rutas `/piezas` y `/ropa` incluidas).
 
-¿Necesitas que genere las pantallas de inventario o ajustes para despliegue en producción (CI/CD, env variables)?
+
+---
+## 🔥 ESTRUCTURA FIRESTORE CONSOLE - ZON SKATESHOP
+
+### 📁 COLECCIONES Y DOCUMENTOS
+
+#### **1. COLECCIÓN: `empleados`**
+*(CRUD administrativo de staff)*
+
+**Estructura del documento:**
+```
+empleados/
+└── {id_empleado}/
+    ├── id: number (autonumérico)
+    ├── nombre: string
+    ├── puesto: string
+    ├── salario: number
+    ├── fechaCreacion: timestamp
+    └── activo: boolean
+```
+
+**Campos detallados:**
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `id` | Number | ✅ | ID secuencial único (1, 2, 3...) |
+| `nombre` | String | ✅ | Nombre completo del empleado |
+| `puesto` | String | ✅ | Cargo/rol en la tienda |
+| `salario` | Number | ✅ | Salario mensual (decimal) |
+| `fechaCreacion` | Timestamp | ✅ | Fecha de registro |
+| `activo` | Boolean | ✅ | Estado laboral (true/false) |
+
+**Ejemplo de documento:**
+```javascript
+// empleados/1
+{
+  id: 1,
+  nombre: "Carlos Méndez",
+  puesto: "Gerente de Tienda",
+  salario: 35000.00,
+  fechaCreacion: Timestamp(2026-05-13),
+  activo: true
+}
+
+// empleados/2
+{
+  id: 2,
+  nombre: "Ana Rodríguez",
+  puesto: "Vendedor Senior",
+  salario: 22000.00,
+  fechaCreacion: Timestamp(2026-05-14),
+  activo: true
+}
+```
+
+---
+
+#### **2. COLECCIÓN: `config`**
+*(Contador autonumérico para IDs de empleados)*
+
+**Estructura del documento:**
+```
+config/
+└── contador_empleados/
+    └── valor: number
+```
+
+**Documento inicial:**
+```javascript
+// config/contador_empleados
+{
+  valor: 0
+}
+```
+
+**Funcionamiento:** 
+- Cada vez que creas un empleado, lees `valor`, lo incrementas en 1, y lo guardas.
+- El nuevo valor es el ID del empleado.
+- Usa **transacciones** de Firestore para evitar colisiones.
+
+---
+
+#### **3. COLECCIÓN: `users`**
+*(Perfiles de usuarios autenticados - opcional pero recomendado)*
+
+**Estructura del documento:**
+```
+users/
+└── {uid_de_firebase_auth}/
+    ├── email: string
+    ├── displayName: string
+    ├── photoURL: string
+    ├── rol: string
+    ├── empleadoId: number (referencia a empleados)
+    ├── createdAt: timestamp
+    └── lastLogin: timestamp
+```
+
+**Campos detallados:**
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `email` | String | Correo del usuario |
+| `displayName` | String | Nombre visible |
+| `photoURL` | String | URL de foto de perfil |
+| `rol` | String | 'admin', 'staff', 'gerente' |
+| `empleadoId` | Number | ID del empleado vinculado |
+| `createdAt` | Timestamp | Fecha de registro |
+| `lastLogin` | Timestamp | Último acceso |
+
+**Ejemplo:**
+```javascript
+// users/abc123xyz (uid de Firebase Auth)
+{
+  email: "carlos@zonskateshop.com",
+  displayName: "Carlos Méndez",
+  photoURL: null,
+  rol: "admin",
+  empleadoId: 1,
+  createdAt: Timestamp(2026-05-13),
+  lastLogin: Timestamp(2026-05-13)
+}
+```
+
+---
+
+#### **4. COLECCIÓN: `categorias`**
+*(Para inventario de piezas y ropa)*
+
+**Estructura:**
+```
+categorias/
+└── {id_categoria}/
+    ├── nombre: string
+    ├── tipo: string ('pieza' | 'ropa' | 'accesorio')
+    ├── descripcion: string
+    └── activa: boolean
+```
+
+**Ejemplos:**
+```javascript
+// categorias/tablas_001
+{
+  nombre: "Tablas",
+  tipo: "pieza",
+  descripcion: "Skateboards completos y decks",
+  activa: true
+}
+
+// categorias/camisetas_001
+{
+  nombre: "Camisetas",
+  tipo: "ropa",
+  descripcion: "Playeras y tops streetwear",
+  activa: true
+}
+```
+
+---
+
+#### **5. COLECCIÓN: `productos`**
+*(Inventario unificado de piezas y ropa)*
+
+**Estructura:**
+```
+productos/
+└── {sku_o_id}/
+    ├── sku: string
+    ├── nombre: string
+    ├── categoriaId: string (referencia a categorias)
+    ├── tipo: string ('pieza' | 'ropa')
+    ├── marca: string
+    ├── precioCompra: number
+    ├── precioVenta: number
+    ├── stockActual: number
+    ├── stockMinimo: number
+    ├── estado: string ('disponible' | 'agotado' | 'descontinuado')
+    ├── fechaCreacion: timestamp
+    └── imagenes: array<string>
+```
+
+**Ejemplo:**
+```javascript
+// productos/TB-PRO-825
+{
+  sku: "TB-PRO-825",
+  nombre: "Tabla Pro Model 8.25",
+  categoriaId: "tablas_001",
+  tipo: "pieza",
+  marca: "ZON",
+  precioCompra: 45.00,
+  precioVenta: 89.99,
+  stockActual: 12,
+  stockMinimo: 5,
+  estado: "disponible",
+  fechaCreacion: Timestamp(2026-05-13),
+  imagenes: ["https://.../tabla1.jpg"]
+}
+```
+
+---
+
+#### **6. COLECCIÓN: `movimientos_inventario`**
+*(Auditoría de entradas/salidas de productos)*
+
+**Estructura:**
+```
+movimientos_inventario/
+└── {id_autogenerado}/
+    ├── productoId: string
+    ├── productoNombre: string
+    ├── tipoMovimiento: string ('entrada' | 'venta' | 'ajuste' | 'devolucion')
+    ├── cantidad: number
+    ├── fecha: timestamp
+    ├── empleadoId: number
+    ├── empleadoNombre: string
+    └── observaciones: string
+```
+
+**Ejemplo:**
+```javascript
+// movimientos_inventario/mov_001
+{
+  productoId: "TB-PRO-825",
+  productoNombre: "Tabla Pro Model 8.25",
+  tipoMovimiento: "entrada",
+  cantidad: 20,
+  fecha: Timestamp(2026-05-13),
+  empleadoId: 1,
+  empleadoNombre: "Carlos Méndez",
+  observaciones: "Pedido inicial de proveedor"
+}
+```
+
+---
+
+### 🔐 REGLAS DE SEGURIDAD (Firestore Rules)
+
+Ve a **Firestore Database > Rules** y pega esto:
+
+```javascript
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Función auxiliar: verificar si está autenticado
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Función: verificar si es admin
+    function isAdmin() {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol == 'admin';
+    }
+    
+    // COLECCIÓN: empleados
+    match /empleados/{empleadoId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin();
+      allow update, delete: if isAdmin();
+    }
+    
+    // COLECCIÓN: config (solo admin puede modificar contadores)
+    match /config/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    // COLECCIÓN: users (cada usuario solo lee su propio perfil)
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow write: if request.auth.uid == userId;
+      allow update: if isAdmin();
+    }
+    
+    // COLECCIÓN: categorias (lectura pública, escritura solo admin)
+    match /categorias/{categoriaId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // COLECCIÓN: productos
+    match /productos/{productoId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+    
+    // COLECCIÓN: movimientos_inventario
+    match /movimientos_inventario/{movId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
+    }
+  }
+}
+```
+
+---
+
+### 📊 ÍNDICES COMPUESTOS (Opcional pero recomendado)
+
+Ve a **Firestore Database > Indexes** y crea:
+
+1. **empleados**
+   - Campo: `activo` (Ascending) + `id` (Ascending)
+   - Tipo: Collection
+
+2. **productos**
+   - Campo: `tipo` (Ascending) + `stockActual` (Ascending)
+   - Campo: `categoriaId` (Ascending) + `estado` (Ascending)
+   - Campo: `precioVenta` (Descending)
+   - Tipo: Collection
+
+3. **movimientos_inventario**
+   - Campo: `productoId` (Ascending) + `fecha` (Descending)
+   - Campo: `empleadoId` (Ascending) + `fecha` (Descending)
+   - Tipo: Collection
+
+---
+
+###  PASOS PARA CREAR EN FIRESTORE CONSOLE
+
+1. **Ve a Firebase Console** → Selecciona `Proyecto-Zonskateshop`
+2. **Firestore Database** → Click en "Crear base de datos"
+3. **Modo de producción** → Start in production mode (luego reemplazas con las rules de arriba)
+4. **Ubicación** → Selecciona la más cercana (us-central1 o southamerica-east1)
+5. **Click en "Empezar"**
+
+#### **Crear colecciones manualmente:**
+
+**Paso A: Configurar contador**
+1. Click en "Iniciar colección"
+2. ID de colección: `config`
+3. ID del documento: `contador_empleados`
+4. Campo: `valor` → Tipo: Number → Valor: `0`
+5. Guardar
+
+**Paso B: Crear primer empleado de prueba**
+1. Nueva colección: `empleados`
+2. ID del documento: `1` (o dejar que Firestore genere uno automático)
+3. Campos:
+   - `id` → Number → `1`
+   - `nombre` → String → `"Carlos Méndez"`
+   - `puesto` → String → `"Gerente"`
+   - `salario` → Number → `35000`
+   - `fechaCreacion` → Timestamp → `Now`
+   - `activo` → Boolean → `true`
+4. Guardar
+
+**Paso C: Actualizar reglas de seguridad**
+1. Pestaña **Rules**
+2. Reemplaza todo el contenido con el código de arriba
+3. Click en **Publicar**
+
+---
+PROMPT
+Generar una aplicación multiplataforma (Android, Web, Windows) en Flutter/Dart para la administración de **ZON Skateshop** (tienda de skateboards por piezas y ropa streetwear) con arquitectura profesional basada en las carpetas core, models, providers y ui. El sistema debe iniciar con un flujo de autenticación completo mediante Firebase Auth (login, registro, recuperación de contraseña y Google Sign-In) vinculado al proyecto **Proyecto-Zonskateshop**, con una interfaz moderna en rojo, negro y blanco. Debe incluir el CRUD funcional para la entidad **Empleado** (id autonumérico, nombre, puesto, salario) conectado a Cloud Firestore, organizando el código en los archivos **main.dart** (rutas nombradas), **claseempleado.dart** (modelo), **diccionarioempleado.dart** (estado inicial), **verempleados.dart** (listado dinámico) y **guardardatosdiccionario.dart** (lógica de persistencia). El layout debe ser de estilo administrativo urbano, utilizando `provider` para el manejo de estado, configurando el **pubspec.yaml** con las dependencias necesarias (`firebase_core`, `cloud_firestore`, `firebase_auth`, `google_sign_in`, `provider`) y asegurando que la navegación desde **inicio.dart** permita gestionar tanto el staff como el inventario de piezas y ropa de forma totalmente funcional y optimizada para VS Code o Antigravity.
+### 📝 DATOS INICIALES SUGERIDOS
+
+Ejecuta esto en la consola o créalo manualmente:
+
+**Colección `categorias`:**
+```javascript
+[
+  { nombre: "Tablas", tipo: "pieza", descripcion: "Decks y completas", activa: true },
+  { nombre: "Trucks", tipo: "pieza", descripcion: "Ejes y hardware", activa: true },
+  { nombre: "Ruedas", tipo: "pieza", descripcion: "Ruedas y rodamientos", activa: true },
+  { nombre: "Camisetas", tipo: "ropa", descripcion: "Playeras y tops", activa: true },
+  { nombre: "Sudaderas", tipo: "ropa", descripcion: "Hoodies y sweaters", activa: true },
+  { nombre: "Gorras", tipo: "accesorio", descripcion: "Gorras y beanies", activa: true }
+]
+```
+
+---
+
+### ✅ CHECKLIST DE VERIFICACIÓN
+
+- [ ] Colección `config` con documento `contador_empleados` (valor: 0)
+- [ ] Colección `empleados` con al menos 1 documento de prueba
+- [ ] Reglas de seguridad publicadas
+- [ ] Índices compuestos creados (si los necesitas)
+- [ ] Colección `users` se llena automáticamente con Firebase Auth
+- [ ] Colecciones `categorias`, `productos`, `movimientos_inventario` listas
+
+---
+
+¿Necesitas que te genere un **script de importación masiva** (JSON) para crear todos los documentos de una vez, o que te explique cómo **migrar datos desde SQL** si ya tienes información en otra base de datos?
